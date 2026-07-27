@@ -31,12 +31,37 @@ excluding `node_modules/` and `dist/`):
 - `frontend/src/pages/` — `Dashboard.jsx`, `Login.jsx`, `Trades.jsx`, `AddTrade.jsx` (ADV123 lives on AddTrade)
 - `frontend/src/services/apiService.js`
 
-## Quick start
+## What this folder ships
+
+| File | Ticket(s) | What it implements |
+|------|-----------|--------------------|
+| `frontend/vite.config.js`              | ADV111  | Path aliases + proxy to `localhost:8081` |
+| `frontend/src/main.jsx`                | ADV111  | Root render with ThemeProvider + AuthProvider + BrowserRouter |
+| `frontend/src/App.jsx`                 | ADV122, ADV124 | Lazy routes, Suspense, error boundary, theme toggle, logout |
+| `frontend/src/styles/global.css`       | —       | CSS tokens, dark theme, component styles |
+| `frontend/src/context/AuthContext.jsx` | ADV112  | JWT persisted in sessionStorage; `useAuth()` hook |
+| `frontend/src/context/ThemeContext.jsx`| ADV124  | Dark/light toggle; syncs `data-theme` + localStorage |
+| `frontend/src/components/withAuth.jsx` | ADV112  | HOC: redirects to `/login` if no JWT |
+| `frontend/src/components/withErrorBoundary.jsx` | ADV113 | HOC: catches render errors; "Try again" button |
+| `frontend/src/components/DataTable.jsx`| ADV114  | Compound component: `Header` / `Body` / `Pagination` |
+| `frontend/src/components/__tests__/DataTable.test.jsx` | ADV125 | RTL: column render + sort-click assertions |
+| `frontend/src/hooks/useWebSocket.js`   | ADV115  | WS with exponential-backoff reconnect; `cancelledRef` guard |
+| `frontend/src/hooks/useTradeStream.js` | ADV116  | EventSource SSE; caps buffer at 200 trades |
+| `frontend/src/hooks/useDebouncedSearch.js` | ADV117 | Debounced copy of query; clearTimeout cleanup |
+| `frontend/src/hooks/useInfiniteScroll.js`  | ADV118 | IntersectionObserver sentinel; stable `loadMoreRef` |
+| `frontend/src/services/apiService.js`  | ADV112, ADV072, ADV114, ADV121, ADV123 | Full fetch wrapper with auth headers + all endpoints |
+| `frontend/src/pages/Dashboard.jsx`     | ADV116, ADV120 | SSE feed + `useMemo` portfolio/stats |
+| `frontend/src/pages/Login.jsx`         | ADV072  | Email/password → JWT → AuthContext |
+| `frontend/src/pages/Trades.jsx`        | ADV114, ADV117 | DataTable + debounced status filter + pagination |
+| `frontend/src/pages/AddTrade.jsx`      | ADV123  | react-hook-form + Yup schema for all 8 trade fields |
+
+## Quick start — copy all solved files at once
 
 ```bash
 # From the project root — one-shot overlay:
 cp -R day8-solved-files/frontend/ frontend/
-cd frontend && npm install    # first time only (node_modules is not in this folder)
+cd frontend && npm install    # only needed if node_modules is missing
+npm run dev                   # http://localhost:5173
 ```
 
 ---
@@ -47,24 +72,21 @@ Fifteen tickets (ADV111–125), all in `frontend/`:
 
 | Ticket | Topic |
 |---|---|
-| ADV111 | Vite setup with path aliases |
-| ADV112 | `withAuth(Component)` HOC |
+| ADV111 | Vite setup with path aliases (`@components`, `@hooks`, …) |
+| ADV112 | `withAuth(Component)` HOC + JWT in `AuthContext` |
 | ADV113 | `withErrorBoundary(Component)` HOC |
-| ADV114 | `<DataTable>` compound component |
-| ADV115 | `useWebSocket(url, options)` hook |
-| ADV116 | `useTradeStream()` hook (SSE) |
+| ADV114 | `<DataTable>` compound component (Header / Body / Pagination) |
+| ADV115 | `useWebSocket(url, options)` — exponential-backoff reconnect |
+| ADV116 | `useTradeStream()` — SSE live feed |
 | ADV117 | `useDebouncedSearch(query, delay)` |
-| ADV118 | `useInfiniteScroll(loadMore)` |
-| ADV119 | `React.memo` on `<TradeRow />` |
-| ADV120 | `useMemo` for portfolio value + P&L |
+| ADV118 | `useInfiniteScroll(loadMore)` — IntersectionObserver sentinel |
+| ADV119 | `React.memo` on row components |
+| ADV120 | `useMemo` for portfolio value + matched/break counts |
 | ADV121 | `useCallback` on handlers passed to memoised children |
 | ADV122 | `React.lazy` + `Suspense` route-based code splitting |
-| ADV123 | Trade entry form (React Hook Form + Yup) |
-| ADV124 | Theme context (light/dark) |
-| ADV125 | React Testing Library tests for dashboard summary cards |
-
-Nothing to overlay from this folder — you edit files under `frontend/`
-directly.
+| ADV123 | Trade entry form — react-hook-form + Yup |
+| ADV124 | `ThemeContext` — dark/light toggle wired to `data-theme` |
+| ADV125 | RTL tests: `<DataTable>` column render + sort-click |
 
 ---
 
