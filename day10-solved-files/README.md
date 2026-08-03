@@ -160,6 +160,361 @@ git push origin v1.0.0
 
 ---
 
+## Final Day Demo — Step by Step
+
+Follow these steps in order on demo day. Allow **5–10 minutes** for the stack to build on first run.
+
+> Commands are shown for **Mac (Terminal / zsh)** and **Windows (PowerShell)** side by side.
+> Windows users: make sure **Docker Desktop**, **Git for Windows**, and **Java 21** are installed.
+> On Windows, run PowerShell as a regular user (no Administrator needed for Docker Desktop).
+
+---
+
+### Prerequisites — install once before demo day
+
+| Tool | Mac | Windows |
+|------|-----|---------|
+| Docker Desktop | [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/) | Same link — install and start Docker Desktop |
+| Java 21 (Temurin) | `brew install --cask temurin@21` | Download from [adoptium.net](https://adoptium.net) and run the installer |
+| k6 load tester | `brew install k6` | `winget install k6` or `choco install k6` |
+| Git | `brew install git` (usually pre-installed) | [git-scm.com](https://git-scm.com/download/win) — includes Git Bash |
+
+Verify everything is ready:
+
+**Mac — Terminal:**
+```bash
+docker --version        # Docker version 25+
+java -version           # openjdk 21
+k6 version              # k6 v0.50+
+git --version
+```
+
+**Windows — PowerShell:**
+```powershell
+docker --version
+java -version
+k6 version
+git --version
+```
+
+---
+
+### Step 1 — Open a terminal in the project root
+
+**Mac:**
+```bash
+cd ~/path/to/reconx
+# or drag the project folder onto Terminal
+```
+
+**Windows (PowerShell):**
+```powershell
+cd C:\path\to\reconx
+# or right-click the project folder → "Open in Terminal"
+```
+
+> All commands from Step 2 onward assume you are **inside the project root folder**.
+
+---
+
+### Step 2 — Clean slate (remove any previous containers and volumes)
+
+**Mac:**
+```bash
+docker compose down -v
+```
+
+**Windows (PowerShell):**
+```powershell
+docker compose down -v
+```
+
+> This deletes old containers and data volumes so the demo starts completely fresh.
+> Safe to skip if this is the very first run.
+
+---
+
+### Step 3 — Build the backend JAR
+
+The Dockerfile picks up the compiled JAR from `target/` — build it first.
+
+**Mac:**
+```bash
+cd backend
+./mvnw -q clean package -DskipTests
+cd ..
+```
+
+**Windows (PowerShell):**
+```powershell
+cd backend
+.\mvnw.cmd -q clean package "-DskipTests"
+cd ..
+```
+
+> Expected output: a line like `BUILD SUCCESS`. This takes 1–3 minutes on first run
+> (Maven downloads dependencies); subsequent runs are much faster.
+
+---
+
+### Step 4 — Start the full 7-service stack
+
+**Mac:**
+```bash
+docker compose up -d --build
+```
+
+**Windows (PowerShell):**
+```powershell
+docker compose up -d --build
+```
+
+> Docker builds the backend and frontend images, then starts all 7 containers in the background.
+> First build takes 3–5 minutes. Subsequent runs take ~30 seconds.
+
+---
+
+### Step 5 — Wait for every service to be healthy
+
+**Mac:**
+```bash
+# Refreshes every 2 seconds — press Ctrl+C to stop watching once all are healthy
+watch -n 2 'docker compose ps'
+```
+
+**Windows (PowerShell):**
+```powershell
+# Prints status every 3 seconds — press Ctrl+C to stop
+while ($true) { docker compose ps; Start-Sleep 3; Clear-Host }
+```
+
+Wait until the table shows all services as running or healthy:
+
+| Container | Expected status |
+|-----------|----------------|
+| reconx-postgres | `healthy` |
+| reconx-zookeeper | `running` |
+| reconx-kafka | `healthy` |
+| reconx-backend | `healthy` |
+| reconx-frontend | `running` |
+| reconx-prometheus | `running` |
+| reconx-grafana | `running` |
+
+> The backend takes the longest (~45s) because it waits for Postgres **and** Kafka to be healthy first.
+
+---
+
+### Step 6 — Confirm the backend is responding
+
+**Mac:**
+```bash
+curl http://localhost:8081/api/actuator/health
+# Expected: {"status":"UP", ...}
+```
+
+**Windows (PowerShell):**
+```powershell
+Invoke-RestMethod http://localhost:8081/api/actuator/health
+# Expected: status UP
+```
+
+---
+
+### Step 7 — Open all demo tabs in the browser
+
+Open these four tabs **before** you start talking through the demo:
+
+| # | URL | What to show |
+|---|-----|--------------|
+| 1 | http://localhost:5173 | Frontend SPA — trade dashboard |
+| 2 | http://localhost:8081/api/swagger-ui.html | Swagger UI — REST API docs |
+| 3 | http://localhost:3000 | Grafana — ReconX Overview dashboard |
+| 4 | http://localhost:9090/targets | Prometheus — confirm backend target is UP |
+
+Grafana login: **admin / admin** (no setup needed — provisioned automatically).
+
+---
+
+### Step 8 — Login and create trades via the SPA
+
+1. Go to **http://localhost:5173**
+2. Login with username `admin`, password `admin`
+3. Navigate to the **Trades** page
+4. Use the **Create Trade** form to add 3 trades — fill in any values you like
+5. Each trade appears in the list **without a page refresh** (Server-Sent Events push)
+6. Point out the **live feed panel** updating in real time
+
+> This demonstrates the full path: SPA → REST API → Kafka → reconciliation engine → SSE push back to browser.
+
+---
+
+### Step 9 — Show the REST API via Swagger
+
+1. Go to **http://localhost:8081/api/swagger-ui.html**
+2. Expand **Auth** → `POST /auth/login`
+   - Click **Try it out** → body: `{ "username": "admin", "password": "admin" }` → **Execute**
+   - Copy the `token` value from the response
+3. Click **Authorize** (top-right lock icon) → paste the token → **Authorize** → **Close**
+4. Expand **Trades** → `GET /trades` → **Execute** — shows the 3 trades created via the SPA
+5. Expand **Audit** → `GET /audit/trades/{id}/history`
+   - Paste one of the trade IDs → **Execute** — shows the full revision history (Hibernate Envers)
+
+---
+
+### Step 10 — Show Kafka topics via Kafdrop (optional)
+
+Start Kafdrop with the debug profile:
+
+**Mac:**
+```bash
+docker compose --profile debug up -d kafdrop
+```
+
+**Windows (PowerShell):**
+```powershell
+docker compose --profile debug up -d kafdrop
+```
+
+Open **http://localhost:9000** and show:
+
+| Topic | What it contains |
+|-------|-----------------|
+| `trade-events` | Messages published when trades were created |
+| `recon-results` | Reconciliation output for each trade |
+| `audit-events` | Mutation events feeding the audit log |
+| `trade-events-dlq` | Dead-letter queue — messages that failed 3 retries |
+
+Click on a message to show the JSON payload structure.
+
+---
+
+### Step 11 — Run the k6 load test while watching Grafana
+
+Open **http://localhost:3000** → Dashboards → **ReconX Overview** — keep it visible.
+
+Open a **second terminal** in the project root and run:
+
+**Mac:**
+```bash
+k6 run load-tests/trade-creation.js
+```
+
+**Windows (PowerShell):**
+```powershell
+k6 run load-tests\trade-creation.js
+```
+
+**While k6 runs (60 seconds), narrate what you see in Grafana:**
+- `trade_created_total` counter climbing rapidly (~200 trades/sec)
+- `http_server_requests_seconds` P95 latency staying flat
+- JVM heap and CPU panels reacting to the load
+
+**After k6 finishes, show the terminal summary:**
+```
+✓ trade created 201
+✓ id returned
+
+checks.........................: 100.00%
+http_req_failed................: 0.00%    ← must be < 1%
+http_req_duration p(95)........: 380ms    ← must be < 800ms
+trades_created_total...........: 12000+
+```
+
+---
+
+### Step 12 — Run quality gates (show CI works locally too)
+
+**Mac:**
+```bash
+cd backend
+./mvnw verify -Pci
+open target/site/jacoco/index.html   # opens coverage report in browser
+cd ..
+```
+
+**Windows (PowerShell):**
+```powershell
+cd backend
+.\mvnw.cmd verify "-Pci"
+start target\site\jacoco\index.html   # opens coverage report in browser
+cd ..
+```
+
+> Look for **Total line coverage ≥ 85%** in the JaCoCo report.
+> If Checkstyle finds a violation the build fails with a clear error message.
+
+---
+
+### Step 13 — Show the CI pipeline on GitHub
+
+1. Open your GitHub repository in the browser
+2. Click the **Actions** tab
+3. Click the latest workflow run on `main`
+4. Walk through the 3 jobs:
+   - **Liquibase validate** — changelog is consistent ✓
+   - **Maven verify** — tests pass, JaCoCo ≥ 85%, Checkstyle clean ✓
+   - **Docker build & push** — images pushed to GHCR ✓
+
+---
+
+### Step 14 — Tag the v1.0.0 release
+
+Run this **after** CI is green on `main`:
+
+**Mac:**
+```bash
+git tag -a v1.0.0 -m "Release 1.0.0 — ReconX Advanced Track"
+git push origin v1.0.0
+```
+
+**Windows (PowerShell):**
+```powershell
+git tag -a v1.0.0 -m "Release 1.0.0 — ReconX Advanced Track"
+git push origin v1.0.0
+```
+
+> This triggers CI to build versioned images:
+> `ghcr.io/<org>/reconx-backend:1.0.0` and `ghcr.io/<org>/reconx-frontend:1.0.0`
+
+---
+
+### Step 15 — Tear down
+
+**Mac:**
+```bash
+# If Kafdrop was started:
+docker compose --profile debug down -v
+
+# If Kafdrop was NOT started:
+docker compose down -v
+```
+
+**Windows (PowerShell):**
+```powershell
+# If Kafdrop was started:
+docker compose --profile debug down -v
+
+# If Kafdrop was NOT started:
+docker compose down -v
+```
+
+> The `-v` flag removes all data volumes — Postgres data, Grafana state, etc.
+> Omit `-v` if you want to keep the data for a second demo run.
+
+---
+
+### Quick Reference — all URLs
+
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| Frontend SPA | http://localhost:5173 | admin / admin |
+| Backend Swagger | http://localhost:8081/api/swagger-ui.html | — (use JWT from /auth/login) |
+| Grafana | http://localhost:3000 | admin / admin |
+| Prometheus | http://localhost:9090 | — |
+| Kafdrop (debug) | http://localhost:9000 | — |
+
+---
+
 ## Troubleshooting
 
 | Symptom | Fix |
