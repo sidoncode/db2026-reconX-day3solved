@@ -6,6 +6,401 @@ and surfaces real-time alerts and dashboards through a React SPA backed by a Spr
 
 ---
 
+## For Students — Start Here
+
+> Read this section first before doing anything else.
+> Every command is provided for both **macOS (Terminal)** and **Windows (PowerShell)**.
+
+This is Day 10 — the final day. You are going to:
+1. Apply all the solved files from this folder into your project
+2. Configure the GitHub Actions CI pipeline
+3. Boot the full stack with Docker
+4. Run the load test and watch the Grafana dashboard
+5. Tag `v1.0.0` and ship
+
+---
+
+### What You Need Installed (one-time setup)
+
+Install these tools **before** you start. Check each one after installing.
+
+#### Docker Desktop
+Required to run the full 7-service stack locally.
+
+- Download: https://www.docker.com/products/docker-desktop/
+- After install, open Docker Desktop and wait for the whale icon to show "Engine running"
+- Allocate at least **4 GB RAM** to Docker: Docker Desktop → Settings → Resources → Memory → 4 GB → Apply
+
+**Verify:**
+
+| macOS | Windows (PowerShell) |
+|-------|----------------------|
+| `docker --version` | `docker --version` |
+| `docker compose version` | `docker compose version` |
+
+Expected output: `Docker version 25+` and `Docker Compose version v2+`
+
+---
+
+#### Java 21 (Temurin JDK)
+Required to build the backend JAR with Maven.
+
+- Download: https://adoptium.net/temurin/releases/?version=21
+- On the page: select **Version 21**, your OS, your Architecture (x64 for most), **JDK**, `.pkg` (macOS) or `.msi` (Windows) → Download and install
+
+**Verify:**
+
+| macOS | Windows (PowerShell) |
+|-------|----------------------|
+| `java -version` | `java -version` |
+
+Expected output: `openjdk version "21.x.x"`
+
+> **Windows tip:** After installing Java, close and reopen PowerShell so the `PATH` update takes effect.
+
+---
+
+#### Git
+Required to clone the repo and push commits/tags.
+
+**macOS:** Git is usually pre-installed. If not:
+```bash
+brew install git
+```
+
+**Windows:** Download and install Git for Windows from https://git-scm.com/download/win
+- During install: choose **"Git from the command line and also from 3rd-party software"**
+- This also installs Git Bash (useful if PowerShell gives you trouble)
+
+**Verify:**
+
+| macOS | Windows (PowerShell) |
+|-------|----------------------|
+| `git --version` | `git --version` |
+
+---
+
+#### k6 (Load Testing Tool)
+Required for the load test in Step 11.
+
+**macOS:**
+```bash
+brew install k6
+```
+
+**Windows (PowerShell — run as Administrator):**
+```powershell
+winget install k6
+# or if you have Chocolatey:
+choco install k6
+```
+
+**Verify:**
+
+| macOS | Windows (PowerShell) |
+|-------|----------------------|
+| `k6 version` | `k6 version` |
+
+Expected output: `k6 v0.50+`
+
+---
+
+### Step 1 — Clone the project (if you haven't already)
+
+**macOS:**
+```bash
+git clone https://github.com/<your-org>/reconx.git
+cd reconx
+```
+
+**Windows (PowerShell):**
+```powershell
+git clone https://github.com/<your-org>/reconx.git
+cd reconx
+```
+
+> Replace `<your-org>` with your GitHub username or organisation name.
+
+---
+
+### Step 2 — Apply the Day 10 solved files into your project
+
+Run these commands from the **project root** (the folder that contains `docker-compose.yml`).
+
+**macOS:**
+```bash
+# Infra files
+cp day10-solved-files/docker-compose.yml .
+cp day10-solved-files/backend/Dockerfile backend/
+cp day10-solved-files/frontend/Dockerfile frontend/
+cp day10-solved-files/frontend/nginx.conf frontend/
+cp -R day10-solved-files/monitoring .
+
+# Backend build + quality
+cp day10-solved-files/backend/pom.xml backend/
+cp day10-solved-files/backend/checkstyle.xml backend/
+
+# CI pipeline
+mkdir -p .github/workflows
+cp day10-solved-files/.github/workflows/ci.yml .github/workflows/
+
+# Load test + smoke test
+mkdir -p load-tests scripts
+cp day10-solved-files/load-tests/trade-creation.js load-tests/
+cp day10-solved-files/scripts/smoke-test.sh scripts/
+chmod +x scripts/smoke-test.sh
+
+# Docs + README
+cp day10-solved-files/README.md .
+mkdir -p docs db/diagrams
+cp day10-solved-files/docs/demo-deck.md docs/
+cp day10-solved-files/docs/demo-runsheet.md docs/
+cp day10-solved-files/docs/retro.md docs/
+cp day10-solved-files/db/diagrams/architecture.md db/diagrams/
+```
+
+**Windows (PowerShell):**
+```powershell
+# Infra files
+Copy-Item day10-solved-files\docker-compose.yml .
+Copy-Item day10-solved-files\backend\Dockerfile backend\
+Copy-Item day10-solved-files\frontend\Dockerfile frontend\
+Copy-Item day10-solved-files\frontend\nginx.conf frontend\
+Copy-Item -Recurse day10-solved-files\monitoring . -Force
+
+# Backend build + quality
+Copy-Item day10-solved-files\backend\pom.xml backend\
+Copy-Item day10-solved-files\backend\checkstyle.xml backend\
+
+# CI pipeline
+New-Item -ItemType Directory -Force -Path .github\workflows
+Copy-Item day10-solved-files\.github\workflows\ci.yml .github\workflows\
+
+# Load test + smoke test
+New-Item -ItemType Directory -Force -Path load-tests, scripts
+Copy-Item day10-solved-files\load-tests\trade-creation.js load-tests\
+Copy-Item day10-solved-files\scripts\smoke-test.sh scripts\
+
+# Docs + README
+Copy-Item day10-solved-files\README.md .
+New-Item -ItemType Directory -Force -Path docs, db\diagrams
+Copy-Item day10-solved-files\docs\demo-deck.md docs\
+Copy-Item day10-solved-files\docs\demo-runsheet.md docs\
+Copy-Item day10-solved-files\docs\retro.md docs\
+Copy-Item day10-solved-files\db\diagrams\architecture.md db\diagrams\
+```
+
+---
+
+### Step 3 — Configure the GitHub Actions CI pipeline
+
+**3a. Enable write permissions for GitHub Actions on your repo:**
+
+1. Open your GitHub repository in the browser
+2. Go to **Settings** → **Actions** → **General**
+3. Under **Workflow permissions** → select **Read and write permissions**
+4. Click **Save**
+
+> Without this step the Docker push job will fail with `403 Forbidden`.
+
+**3b. Push the CI file to GitHub to activate the pipeline:**
+
+**macOS:**
+```bash
+git add .github/workflows/ci.yml
+git commit -m "Add CI pipeline"
+git push
+```
+
+**Windows (PowerShell):**
+```powershell
+git add .github/workflows/ci.yml
+git commit -m "Add CI pipeline"
+git push
+```
+
+Go to your repo on GitHub → **Actions** tab → you should see a workflow run starting.
+
+---
+
+### Step 4 — Build the backend JAR
+
+The Docker build copies the compiled JAR from `target/` — build it first.
+
+**macOS:**
+```bash
+cd backend
+./mvnw -q clean package -DskipTests
+cd ..
+```
+
+**Windows (PowerShell):**
+```powershell
+cd backend
+.\mvnw.cmd -q clean package "-DskipTests"
+cd ..
+```
+
+Expected: `BUILD SUCCESS` printed at the end.
+
+---
+
+### Step 5 — Start the full stack
+
+**macOS:**
+```bash
+docker compose up -d --build
+```
+
+**Windows (PowerShell):**
+```powershell
+docker compose up -d --build
+```
+
+> First run takes 3–5 minutes (Docker downloads all base images and builds your app).
+> Subsequent runs take ~30 seconds.
+
+---
+
+### Step 6 — Check that all services are healthy
+
+**macOS:**
+```bash
+watch -n 2 'docker compose ps'
+# Press Ctrl+C once everything is healthy
+```
+
+**Windows (PowerShell):**
+```powershell
+while ($true) { docker compose ps; Start-Sleep 3; Clear-Host }
+# Press Ctrl+C once everything is healthy
+```
+
+All 7 services should reach this state:
+
+| Container | Status |
+|-----------|--------|
+| reconx-postgres | `healthy` |
+| reconx-zookeeper | `running` |
+| reconx-kafka | `healthy` |
+| reconx-backend | `healthy` |
+| reconx-frontend | `running` |
+| reconx-prometheus | `running` |
+| reconx-grafana | `running` |
+
+---
+
+### Step 7 — Open the app in your browser
+
+| What | URL | Login |
+|------|-----|-------|
+| Frontend SPA | http://localhost:5173 | admin / admin |
+| Backend API docs | http://localhost:8081/api/swagger-ui.html | — |
+| Grafana dashboards | http://localhost:3000 | admin / admin |
+| Prometheus metrics | http://localhost:9090 | — |
+
+---
+
+### Step 8 — Run the quality gates locally
+
+**macOS:**
+```bash
+cd backend
+./mvnw verify -Pci
+open target/site/jacoco/index.html
+cd ..
+```
+
+**Windows (PowerShell):**
+```powershell
+cd backend
+.\mvnw.cmd verify "-Pci"
+start target\site\jacoco\index.html
+cd ..
+```
+
+The build must pass with:
+- JaCoCo line coverage **≥ 85%** (check the HTML report)
+- Checkstyle **0 violations** (any violation fails the build with a clear message)
+
+---
+
+### Step 9 — Run the k6 load test
+
+Make sure the stack from Step 5 is still running.
+
+**macOS:**
+```bash
+k6 run load-tests/trade-creation.js
+```
+
+**Windows (PowerShell):**
+```powershell
+k6 run load-tests\trade-creation.js
+```
+
+Watch **Grafana → ReconX Overview** while k6 runs. After 60 seconds you should see:
+- `http_req_failed` **< 1%**
+- `p(95)` latency **< 800ms**
+
+---
+
+### Step 10 — Tag the release
+
+Run this after CI is green on `main`.
+
+**macOS:**
+```bash
+git tag -a v1.0.0 -m "Release 1.0.0 — ReconX Advanced Track"
+git push origin v1.0.0
+```
+
+**Windows (PowerShell):**
+```powershell
+git tag -a v1.0.0 -m "Release 1.0.0 — ReconX Advanced Track"
+git push origin v1.0.0
+```
+
+CI will automatically build and push:
+- `ghcr.io/<your-org>/reconx-backend:1.0.0`
+- `ghcr.io/<your-org>/reconx-frontend:1.0.0`
+
+---
+
+### Step 11 — Tear down when done
+
+**macOS:**
+```bash
+docker compose down -v
+```
+
+**Windows (PowerShell):**
+```powershell
+docker compose down -v
+```
+
+> `-v` removes all data volumes (Postgres data, Grafana state). Omit it if you want to keep the data.
+
+---
+
+### Common Problems and Fixes
+
+| Problem | Fix |
+|---------|-----|
+| `docker compose up` hangs or a container exits immediately | Run `docker compose logs <service-name>` to read the error |
+| Backend exits with `JWT_SECRET` error | Open `docker-compose.yml`, find `backend.environment`, add `JWT_SECRET: any-string-32-chars-min` |
+| Grafana dashboards show "No data" | The Prometheus datasource URL must be `http://prometheus:9090` not `localhost:9090` — check `monitoring/grafana/provisioning/datasources/prometheus.yml` |
+| Prometheus shows backend target as DOWN | The scrape target must be `backend:8081` not `localhost:8081` — check `monitoring/prometheus/prometheus.yml` |
+| `./mvnw: Permission denied` (macOS) | Run `chmod +x backend/mvnw` then retry |
+| `mvnw.cmd` not recognised (Windows) | Make sure you are inside the `backend` folder and Java 21 is on your PATH |
+| JaCoCo coverage below 85% | Add unit tests for exception handling paths, then re-run `mvn verify -Pci` |
+| Checkstyle build failure | Read the error — it shows file name + line number + rule. Fix the formatting issue and re-run |
+| k6 reports lots of 401 errors | The JWT token expired during the run — the provided script already handles this via `setup()`, so make sure you are running the file from `load-tests/trade-creation.js` |
+| `git push` rejected on tag | The tag already exists remotely — delete it first: `git push origin --delete v1.0.0` then re-tag |
+| CI `docker` job fails with 403 | Go to repo Settings → Actions → General → set Workflow permissions to **Read and write** |
+
+---
+
 ## Architecture
 
 See [`db/diagrams/architecture.md`](db/diagrams/architecture.md) for full C4 diagrams
